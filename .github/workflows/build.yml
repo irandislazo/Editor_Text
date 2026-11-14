@@ -29,9 +29,19 @@ jobs:
           mkdir -p monaco installer
           npm pack monaco-editor@0.52.2
           tar -xzf monaco-editor-0.52.2.tgz -C monaco --strip-components=2 package/min/vs
+      - name: Icono (convertir PNG a ICO)
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          pip install pillow
+          if [ -f assets/icon.png ]; then
+            python -c "from PIL import Image; Image.open('assets/icon.png').convert('RGBA').save('assets/icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+          fi
       - name: Generar app
         working-directory: ${{ env.APP_DIR }}
-        run: flet pack main.py --name BlocDeNotas -y --onedir --add-data "monaco;monaco"
+        run: |
+          ICON=""
+          if [ -f assets/icon.ico ]; then ICON="--icon assets/icon.ico"; fi
+          flet pack main.py --name BlocDeNotas -y --onedir $ICON --add-data "monaco;monaco"
       - run: choco install innosetup -y --no-progress
         shell: pwsh
       - name: Crear instalador
@@ -69,6 +79,7 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/app"
           cp "$APP_DIR/main.py" "$APP_DIR/monaco_bridge.py" "$APP_DIR/pyproject.toml" "$GITHUB_WORKSPACE/app/"
+          if [ -d "$APP_DIR/assets" ]; then cp -r "$APP_DIR/assets" "$GITHUB_WORKSPACE/app/"; fi
       - name: Compilar APK
         working-directory: app
         run: flet build apk --yes --verbose
