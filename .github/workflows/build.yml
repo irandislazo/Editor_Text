@@ -1,0 +1,82 @@
+name: Build
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Localizar el proyecto (donde esté main.py)
+        run: |
+          D=$(dirname "$(find . -name main.py -not -path './.git/*' | head -1)")
+          echo "APP_DIR=$D" >> "$GITHUB_ENV"
+          echo "Proyecto en: $D"
+      - run: pip install "flet[all]==0.80.5" pygments pyinstaller
+      - name: Crear carpeta monaco y descargar Monaco
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          mkdir -p monaco installer
+          npm pack monaco-editor@0.52.2
+          tar -xzf monaco-editor-0.52.2.tgz -C monaco --strip-components=2 package/min/vs
+      - name: Generar app
+        working-directory: ${{ env.APP_DIR }}
+        run: flet pack main.py --name BlocDeNotas -y --onedir --add-data "monaco;monaco"
+      - run: choco install innosetup -y --no-progress
+        shell: pwsh
+      - name: Crear instalador
+        working-directory: ${{ env.APP_DIR }}
+        shell: pwsh
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlocDeNotas-Windows-Setup
+          path: ${{ env.APP_DIR }}/installer/BlocDeNotas-Setup.exe
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ env.APP_DIR }}/installer/BlocDeNotas-Setup.exe
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Localizar el proyecto (donde esté main.py)
+        run: |
+          D=$(dirname "$(find . -name main.py -not -path './.git/*' | head -1)")
+          echo "APP_DIR=$D" >> "$GITHUB_ENV"
+      - run: pip install "flet[all]==0.80.5"
+      - name: Aceptar licencias del SDK de Android
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+      - name: Crear carpeta app (solo lo necesario para Android)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/app"
+          cp "$APP_DIR/main.py" "$APP_DIR/monaco_bridge.py" "$APP_DIR/pyproject.toml" "$GITHUB_WORKSPACE/app/"
+      - name: Compilar APK
+        working-directory: app
+        run: flet build apk --yes --verbose
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlocDeNotas-Android-APK
+          path: app/build/apk/*.apk
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: app/build/apk/*.apk
