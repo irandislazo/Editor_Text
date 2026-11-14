@@ -1,0 +1,13 @@
+[project]
+name = "bloc-de-notas"
+version = "1.0.0"
+description = "Bloc de notas con editor de código"
+requires-python = ">=3.10"
+dependencies = ["flet==0.80.5", "pygments"]
+
+[tool.flet]
+product = "Bloc de Notas"
+org = "com.blocdenotas"
+
+[tool.flet.app]
+path = "."
